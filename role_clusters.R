@@ -37,8 +37,9 @@ data_dmgscore$match.id <- as.factor(data_dmgscore$match.id)
 # data$match.id <- as.numeric(data$match.id)
 datapl <- merge(datapl, data_dmgscore, by = c('match.id', 'player', 'team'), all.x = T)
 datapl <- datapl%>%
-  select(-score1)%>%
+  mutate(player.score=ifelse(is.na(score1),player.score,score1))%>%
   mutate(damage.dealt=ifelse(is.na(damage),damage.dealt,damage))%>%
+  select(-score1)%>%
   select(-damage)
 
 
