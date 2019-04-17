@@ -4,6 +4,8 @@ library(lubridate)
 library(RCurl)
 library(dplyr)
 library(googlesheets)
+library(flexclust)
+library(reshape2)
 setwd("C:/Users/JP/Downloads/")
 
 ###############Pro League###########
@@ -124,37 +126,50 @@ hpdata <- data %>%
   filter(!is.na(assists))%>%
   filter(mode=="Hardpoint")%>%
   mutate(EPM=((kills+assists+deaths)/mf*100)*60/(duration..s.),
-         DPM = (damage.dealt*60)/(duration..s.),
+        # DPM = (damage.dealt*60)/(duration..s.),
          SPM = (player.score*60)/(duration..s.),
          DeathPM = (deaths*60)/(duration..s.),
          HillTime=(hill.time..s.*60)/(duration..s.),
-         APM = (assists*60)/(duration..s.),
-         KPM = (kills*60)/(duration..s.))%>%
-  select(player,EPM,DPM,SPM,DeathPM,HillTime,APM,KPM)
+         APM = (assists*60)/(duration..s.))%>%
+        # KPM = (kills*60)/(duration..s.))%>%
+  select(player,team,EPM,SPM,DeathPM,HillTime,APM)
 
 #Clustering Kmeans------
-hpcluster<-data%>%
+data <- data %>%
+  mutate(hek = ifelse(mode == "Hardpoint", kills, ifelse(mode == "Search & Destroy", kills*3.63, kills*1.23))) %>%
+  mutate(hed = ifelse(mode == "Hardpoint", deaths, ifelse(mode == "Search & Destroy", deaths*3.63, deaths*1.23))) %>%
+  mutate(EngPlus=(kills+ifelse(!is.na(assists),assists,0)+deaths)/mf*100,
+         APlus=ifelse(!is.na(assists),assists,0)/mf*100,
+         dmgpr = damage.dealt/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         spr = player.score/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         dpr = deaths/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         apr = assists/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         kpr = kills/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         kdr = kills/deaths,
+         fbpr = snd.firstbloods/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         fdpr = snd.firstdeaths/ifelse(snd.rounds == 0,duration..s.,snd.rounds)) 
+player_group<-data%>%
   filter(mode=="Hardpoint")%>%
   group_by(player,team) %>%
   summarise(EPM = round(sum(EngPlus, na.rm = T)/
                           (sum(duration..s.,na.rm =T))*60,6),
             SPM = round(sum(player.score, na.rm = T)/
                           (sum(duration..s.,na.rm =T))*60,6),
-            DPM = round(sum(damage.dealt, na.rm = T)/
-                          (sum(duration..s.,na.rm =T))*60,6),
+           # DPM = round(sum(damage.dealt, na.rm = T)/
+           #               (sum(duration..s.,na.rm =T))*60,6),
             DeathPM = round(sum(deaths, na.rm = T)/
                               (sum(duration..s.,na.rm =T))*60,6),
             HillTime=round(mean(hill.time..s.,na.rm = T),1),
-            APM=round(sum(assists,na.rm = T)/(sum(duration..s.,na.rm =T))*60,6),
-            KPM=round(sum(kills,na.rm=T)/(sum(duration..s.,na.rm =T))*60,6))%>%
-  select(SPM,DPM,EPM,DeathPM,HillTime,APM,KPM)%>%
+            APM=round(sum(assists,na.rm = T)/(sum(duration..s.,na.rm =T))*60,6))%>%
+           # KPM=round(sum(kills,na.rm=T)/(sum(duration..s.,na.rm =T))*60,6))%>%
+  select(player,SPM,EPM,DeathPM,HillTime,APM)%>%
   arrange(desc(SPM))%>%
   data.frame()
 
-hpcluster<-hpcluster[,-1]
+hpcluster<-hpdata[,c(-1,-2)]
 hpclusterScaled<-scale(hpcluster)
 
-fitK<-kmeans(hpclusterScaled,5)
+fitK<-kmeans(hpclusterScaled,4)
 fitK
 plot(hpcluster,col=fitK$cluster)
 
@@ -168,3 +183,10 @@ for(i in 1:10){
   betweenss_totss[[i]]<-k[[i]]$betweenss/k[[i]]$totss
 }
 plot(1:10,betweenss_totss,type="b",ylab="between ss/total ss",xlab="clusters (k)")
+
+player_group$group<-predict(as.kcca(fitK, data = hpclusterScaled), scale(player_group[c(-1)]))
+
+player_group%>%
+  filter(group=="1")
+
+plot(player_group[-1], col = player_group$group)

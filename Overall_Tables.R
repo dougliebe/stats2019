@@ -44,6 +44,10 @@ data_firstgame <- read.csv('head.csv')
 data_firstgame$match.id <- as.factor(data_firstgame$match.id)
 datapl <- rbind(datapl, data_firstgame)
 
+datapl$team <- replace(as.character(datapl$team), datapl$team == "Thieves", "100 Thieves")
+datapl$player <- replace(as.character(datapl$player), datapl$player == "Felony", "Felo")
+datapl$player <- replace(as.character(datapl$player), datapl$player == "Priestah", "Priestahh")
+
 #list sheets
 gs_ls()
 
@@ -61,7 +65,7 @@ data_dmgscore$match.id <- as.factor(data_dmgscore$match.id)
 datapl <- merge(datapl, data_dmgscore, by = c('match.id', 'player', 'team'), all.x = T)
 datapl <- datapl%>%
   select(-score1)%>%
-  mutate(damage.dealt=damage)%>%
+  mutate(damage.dealt=ifelse(is.na(damage),damage.dealt,damage))%>%
   select(-damage)
 
 
@@ -75,13 +79,16 @@ datafw <- read.csv (text = raw)
 data_firstgame <- read.csv('head_fw.csv')
 data_firstgame$match.id <- as.factor(data_firstgame$match.id)
 datafw <- rbind(datafw, data_firstgame)
+datafw$team <- replace(as.character(datafw$team), datafw$team == "Thieves", "100 Thieves")
+datafw$player <- replace(as.character(datafw$player), datafw$player == "Felony", "Felo")
+datafw$player <- replace(as.character(datafw$player), datafw$player == "Priestah", "Priestahh")
 
 
 
 #merge all data
 
-data<-rbind(dataplq,datapl)
-data<-rbind(data,datafw)
+#data<-rbind(dataplq,datapl)
+data<-rbind(datapl,datafw)
 
 
 #merge mapfactor
@@ -330,7 +337,7 @@ playerlb<-playerlb%>%
   arrange(desc(aKD))
 
 
-playerlb<-setNames(playerlb,c("Player","Team",
+playerlb<-setNames(playerlb,c("Player","team",
                               "RespawnKD",
                               "RespawnSPM",
                               "RespawnDPM",
@@ -373,7 +380,7 @@ playerlb<-setNames(playerlb,c("Player","Team",
                               "OverallMaps"))
 
 playerlb %>%
-  select(Player, Team, HPRating,HPSPM, HPDeathPM, ControlRating ,ControlSPM, ControlDeathPM,
+  select(Player, team, HPRating,HPSPM, HPDeathPM, ControlRating ,ControlSPM, ControlDeathPM,
          SnDRating,SnDDPR, SnDSPR, OverallRating, aKD) %>%
   mutate(HPSPM = percent_rank(HPSPM),
          HPDeathPM = percent_rank(-HPDeathPM),
@@ -513,19 +520,19 @@ teamlb<-merge(teamlb,controlrecordlb,by="team")
 teamlb<-merge(teamlb,teamhardpointlb,by="team")
 teamlb<-merge(teamlb,teamcontrollb,by="team")
 teamlb<-merge(teamlb,teamsndlb,by="team")
-teamlb<-teamlb %>% rename(Team = 'team')
+teamlb<-teamlb %>% rename(team = 'team')
 
 
 
 
-playerlb$Team <- replace(as.character(playerlb$Team), playerlb$Team == "Thieves", "100 Thieves")
+playerlb$team <- replace(as.character(playerlb$team), playerlb$team == "Thieves", "100 Thieves")
 playerlb$Player <- replace(as.character(playerlb$Player), playerlb$Player == "Felony", "Felo")
 playerlb$Player <- replace(as.character(playerlb$Player), playerlb$Player == "Priestah", "Priestahh")
 
 
 
 write.csv(playerlb, file = "TestPlayersFullDate.csv")
-write.csv(teamlb, file = "TestTeamFullDate.csv")
+write.csv(teamlb, file = "TestteamFullDate.csv")
 
 
 bracket_kd<-data%>%
@@ -579,8 +586,30 @@ data%>%
   arrange(desc(spec))%>%
   data.frame()
 
-data<-data%>%
-  filter(mode=="Search & Destroy")
-  hist(data$player.score)
+data%>%
+  filter(startsWith(as.character(series.id),'pro-'))%>%
+  group_by(player)%>%
+  summarise(Specialist=Mode(specialist),TK=sum(team.kills))%>%
+  arrange(desc(TK))
 
-  
+
+
+
+# KNN Clustering ------
+hplb<-hplb[,-c(1:2)]
+
+hplbScaled<-scale(hplb)
+fitK<-kmeans(hplbScaled,5)
+fitK
+plot(hplb,col=fitK$cluster)
+
+k<-list()
+for(i in 1:10){
+  k[[i]]<-kmeans(hplbScaled,i)
+}
+
+betweenss_totss<-list()
+for(i in 1:10){
+  betweenss_totss[[i]]<-k[[i]]$betweenss/k[[i]]$totss
+}
+plot(1:10,betweenss_totss,type="b",ylab="between ss/total ss",xlab="clusters (k)")
