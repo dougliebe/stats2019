@@ -169,7 +169,7 @@ player_group<-data%>%
 hpcluster<-hpdata[,c(-1,-2)]
 hpclusterScaled<-scale(hpcluster)
 
-fitK<-kmeans(hpclusterScaled,4)
+fitK<-kmeans(hpclusterScaled,6)
 fitK
 plot(hpcluster,col=fitK$cluster)
 
@@ -186,7 +186,10 @@ plot(1:10,betweenss_totss,type="b",ylab="between ss/total ss",xlab="clusters (k)
 
 player_group$group<-predict(as.kcca(fitK, data = hpclusterScaled), scale(player_group[c(-1)]))
 
-player_group%>%
-  filter(group=="1")
-
 plot(player_group[-1], col = player_group$group)
+
+groups<-player_group%>%
+  arrange(desc(group))%>%
+  select(player,group)
+
+data<-merge(data,groups,by="player")
