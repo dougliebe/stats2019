@@ -6,7 +6,6 @@ library(dplyr)
 library(googlesheets)
 library(flexclust)
 library(reshape2)
-setwd("C:/Users/JP/Downloads/")
 
 ###############Pro League###########
 
@@ -69,41 +68,6 @@ data<-rbind(datapl,datafw)
 #merge mapfactor
 mapfactor <- read.csv('mapfactor.csv')[,-1]
 data<-merge(data,mapfactor,by=c('mode', 'map'),all.x = TRUE)
-
-
-#return functions
-returnOpp <- function(id, team) {
-  data <- data #change this second variable to whatever your dataframe is called
-  opp <- unique(data[data$match.id == id & data$team != team, ]$team)[1]
-  return(opp)
-}
-
-returnOppScore <- function(id, team) {
-  data <- data #change this second variable to whatever your dataframe is called
-  score <- unique(data[data$match.id == id & data$team != team, ]$score)[1]
-  return(score)
-}
-
-returnOppKills <- function(id, team) {
-  data <- data #change this second variable to whatever your dataframe is called
-  kills <- sum(data[data$match.id == id & data$team != team, ]$kills)
-  return(kills)
-}
-
-data$opponent <- mapply(returnOpp,data$match.id, data$team)
-data$opp.score <- mapply(returnOppScore,data$match.id, data$team)
-data$opp.kills <- mapply(returnOppKills,data$match.id, data$team)
-
-returnOppDamage <-function(id, team) {
-  data <- data #change this second variable to whatever your dataframe is called
-  damage <- sum(data[data$match.id == id & data$team != team, ]$damage)
-  return(damage)
-}
-
-data$opp.damage <- mapply(returnOppDamage,data$match.id, data$team)
-data <- data %>%
-  mutate(damage.dealt = ifelse(damage.dealt==0, NA, damage.dealt))
-
 
 Mode = function(x){ 
   ta = table(x)
