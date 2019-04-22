@@ -68,6 +68,32 @@ data<-rbind(datapl,datafw)
 #merge mapfactor
 mapfactor <- read.csv('mapfactor.csv')[,-1]
 data<-merge(data,mapfactor,by=c('mode', 'map'),all.x = TRUE)
+#Clustering Kmeans------
+data <- data %>%
+  mutate(hek = ifelse(mode == "Hardpoint", kills, ifelse(mode == "Search & Destroy", kills*3.63, kills*1.23))) %>%
+  mutate(hed = ifelse(mode == "Hardpoint", deaths, ifelse(mode == "Search & Destroy", deaths*3.63, deaths*1.23))) %>%
+  group_by(mode) %>%
+  mutate(EngPlus=(kills+ifelse(!is.na(assists),assists,0)+deaths)/mf*100,
+         APlus=ifelse(!is.na(assists),assists,0)/mf*100,
+         ar = ifelse(fave.weapon == "Saug 9mm" | fave.weapon == "Spitfire", 0,1),
+         eng.adj = ifelse(ar == 1,
+                          (EngPlus*60/duration..s.)/(pmin(k.d,2)*0.48+3.72),
+                          (EngPlus*60/duration..s.)/(pmin(k.d,2)*0.65+3.71)),
+         EngAdj = eng.adj*(mean(EngPlus*60/duration..s., na.rm = T))*(duration..s./60),
+         EngAdj60 = eng.adj*(mean(EngPlus, na.rm = T)*60/duration..s.),
+         APE = assists/(kills+assists),
+         dmgpr = damage.dealt/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         spr = player.score/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         dpr = deaths/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         apr = assists/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         kpr = kills/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         kdr = kills/deaths,
+         killeff = ((kills*150+assists*75)-damage.dealt)/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         fbpr = snd.firstbloods/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+         fdpr = snd.firstdeaths/ifelse(snd.rounds == 0,duration..s.,snd.rounds)) %>%
+  data.frame()
+
+
 
 Mode = function(x){ 
   ta = table(x)
@@ -82,75 +108,83 @@ Mode = function(x){
   return(mod[1])
 }
 
+
+# adj_eng_ar <- lm(EngPlus/duration..s.*60 ~ k.d, data %>% filter(mode == "Hardpoint") %>%
+#                   mutate(ar = ifelse(fave.weapon == "Saug 9mm" | fave.weapon == "Spitfire", 0,1)) %>%
+#                   filter(ar == 1, k.d < 1.5, k.d>0.5))
+# summary(adj_eng_ar)
+# adj_eng_sub <- lm(EngPlus/duration..s.*60 ~ k.d, data %>% filter(mode == "Hardpoint") %>%
+#                    mutate(ar = ifelse(fave.weapon == "Saug 9mm" | fave.weapon == "Spitfire", 0,1)) %>%
+#                    filter(ar == 0, k.d < 1.5, k.d>0.5))
+# summary(adj_eng_sub)
+
 #merge mf#merge mf
 #mapfactor <- read.csv('mapfactor.csv')[,-1]
 #data<-merge(data,mapfactor,by=c('mode', 'map'),all.x = TRUE)
 #Cluster KNN -----------
 hpdata <- data %>%
   filter(!is.na(assists))%>%
-  filter(mode=="Hardpoint")%>%
-  mutate(EPM=((kills+assists+deaths)/mf*100)*60/(duration..s.),
-        # DPM = (damage.dealt*60)/(duration..s.),
-         SPM = (player.score*60)/(duration..s.),
-         DeathPM = (deaths*60)/(duration..s.),
-         HillTime=(hill.time..s.*60)/(duration..s.),
-         APM = (assists*60)/(duration..s.))%>%
-        # KPM = (kills*60)/(duration..s.))%>%
-  select(player,team,EPM,SPM,DeathPM,HillTime)
+  filter(mode=="Hardpoint") %>%
+  # mutate(EPM=((kills+assists+deaths)/mf*100)*60/(duration..s.),
+  #        APE=(assists)/(kills+assists),
+  #       # DPM = (damage.dealt*60)/(duration..s.),
+  #        SPM = (player.score*60)/(duration..s.),
+  #        DeathPM = (deaths*60)/(duration..s.),
+  #        HillTime=(hill.time..s.*60)/(duration..s.),
+  #       killeff = ((kills*150+assists*75)-damage.dealt)/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
+  #        APM = (assists*60)/(duration..s.))%>%
+  #       # KPM = (kills*60)/(duration..s.))%>%
+  select(player,team, fave.weapon,EngAdj,APE)
 
-#Clustering Kmeans------
-data <- data %>%
-  mutate(hek = ifelse(mode == "Hardpoint", kills, ifelse(mode == "Search & Destroy", kills*3.63, kills*1.23))) %>%
-  mutate(hed = ifelse(mode == "Hardpoint", deaths, ifelse(mode == "Search & Destroy", deaths*3.63, deaths*1.23))) %>%
-  mutate(EngPlus=(kills+ifelse(!is.na(assists),assists,0)+deaths)/mf*100,
-         APlus=ifelse(!is.na(assists),assists,0)/mf*100,
-         dmgpr = damage.dealt/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
-         spr = player.score/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
-         dpr = deaths/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
-         apr = assists/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
-         kpr = kills/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
-         kdr = kills/deaths,
-         fbpr = snd.firstbloods/ifelse(snd.rounds == 0,duration..s.,snd.rounds),
-         fdpr = snd.firstdeaths/ifelse(snd.rounds == 0,duration..s.,snd.rounds)) 
+
 player_group<-data%>%
-  filter(mode=="Hardpoint")%>%
+  filter(mode=="Control")%>%
   group_by(player) %>%
-  summarise(EPM = round(sum(EngPlus, na.rm = T)/
-                          (sum(duration..s.,na.rm =T))*60,6),
+  summarise(EPM = sum(EngAdj, na.rm = T)/
+                          (sum(duration..s.,na.rm =T))*60,
             SPM = round(sum(player.score, na.rm = T)/
                           (sum(duration..s.,na.rm =T))*60,6),
+            APE = sum(assists, na.rm = T)/sum(ifelse(is.na(assists),NA, assists+kills), na.rm = T),
            # DPM = round(sum(damage.dealt, na.rm = T)/
            #               (sum(duration..s.,na.rm =T))*60,6),
             DeathPM = round(sum(deaths, na.rm = T)/
                               (sum(duration..s.,na.rm =T))*60,6),
             HillTime=round(mean(hill.time..s.,na.rm = T),1),
+           weapon = Mode(fave.weapon),
+           kd = sum(kills)/sum(deaths),
             APM=round(sum(assists,na.rm = T)/(sum(duration..s.,na.rm =T))*60,6))%>%
            # KPM=round(sum(kills,na.rm=T)/(sum(duration..s.,na.rm =T))*60,6))%>%
-  select(player,SPM,EPM,DeathPM,HillTime)%>%
-  arrange(desc(SPM))%>%
+  select(player, weapon,EPM,APE)%>%
+  # arrange(desc(SPM))%>%
   data.frame()
 
-hpcluster<-hpdata[,c(-1,-2)]
+hpcluster<-player_group %>%
+  filter( weapon != "Saug 9mm" , weapon != "Spitfire") %>%
+  # filter( weapon == "Saug 9mm" | weapon == "Spitfire") %>%
+  select(-player, -weapon) %>%
+  data.frame()
 hpclusterScaled<-scale(hpcluster)
 set.seed(1)
-fitK<-kmeans(hpclusterScaled,6)
+fitK<-kmeans(hpclusterScaled,3)
 fitK
-# plot(hpcluster,col=fitK$cluster)
-# 
-# k<-list()
-# for(i in 1:10){
-#   k[[i]]<-kmeans(hpclusterScaled,i)
-# }
-# 
-# betweenss_totss<-list()
-# for(i in 1:10){
-#   betweenss_totss[[i]]<-k[[i]]$betweenss/k[[i]]$totss
-# }
-# plot(1:10,betweenss_totss,type="b",ylab="between ss/total ss",xlab="clusters (k)")
+plot(hpcluster, col = fitK$cluster)
 
-player_group$group<-predict(as.kcca(fitK, data = hpclusterScaled), scale(player_group[-1]))
+k<-list()
+for(i in 1:10){
+  k[[i]]<-kmeans(hpclusterScaled,i)
+}
 
-plot(player_group[-1], col = player_group$group)
+betweenss_totss<-list()
+for(i in 1:10){
+  betweenss_totss[[i]]<-k[[i]]$betweenss/k[[i]]$totss
+}
+plot(1:10,betweenss_totss,type="b",ylab="between ss/total ss",xlab="clusters (k)")
+
+player_group$group<-predict(as.kcca(fitK, data = hpclusterScaled), scale(player_group[c(-1,-2)]))
+
+plot(player_group %>%
+       filter(weapon == "Saug 9mm" | weapon == "Spitfire") %>%
+       select(-player, -weapon), col = player_group$group)
 
 #add overall group to data
 data <- merge(data, player_group[,c('player','group')], by = 'player')
@@ -167,8 +201,11 @@ total <- lme4::glmer(win. ~ scale(spr):mode +
                           (mode|group),
                         data %>% filter(!is.na(spr)), family = binomial(link='logit'))
 summary(total)
-ranef(total)
 
+#look at random effects by mode
+exp(ranef(total)$group)
+
+#compare binary error loss
 data %>%
   mutate(pred = predict(total, data, type = "response")) %>%
   mutate(correct = ifelse((pred < 0.5 & win. == "L") | (pred > 0.5 & win. == "W"),1,0 )) %>%
@@ -176,9 +213,9 @@ data %>%
   summarise(p = mean(correct, na.rm = T))
 
 
-  data.frame() %>%
-  # ggplot(aes(pred, color = mode))+geom_density()
-
+  # data.frame() %>%
+  # # ggplot(aes(pred, color = mode))+geom_density()
+  # 
 
 
 
